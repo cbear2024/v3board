@@ -126,7 +126,7 @@ TelegramService 新增 MarkdownV2 安全转义（保护代码块）、统一的 
 
 环境要求：
 
-- PHP 8.2+（已升级到 Laravel 12，不再支持 PHP 7.x / 8.0 / 8.1）
+- PHP 8.2 / 8.3 / 8.4 / 8.5（均已通过完整安装测试；推荐 8.4 或 8.5，8.2 将于 2026-12-31 停止维护）
 - PHP 扩展：fileinfo、redis；使用 Webman 加速还需 pcntl、posix，并在宝塔中解除 putenv、proc_open、pcntl_* 函数禁用
 - Composer
 - MySQL 5.7+
