@@ -81,7 +81,7 @@ jobs:
 
           # 真正跑一遍安装命令（导入 install.sql + 创建管理员）
           mv .env .env.ci
-          step "v2board:install" bash -c "printf '127.0.0.1\nv2board\nroot\nroot\nadmin@example.com\n' | php artisan v2board:install"
+          step "v2board:install" bash -c "{ for a in 127.0.0.1 v2board root root admin@example.com; do sleep 3; echo \$a; done; } | php artisan v2board:install | tee /tmp/install.txt"
           [ -f .env ] || mv .env.ci .env
           sed -i 's/^APP_DEBUG=.*/APP_DEBUG=true/' .env
           step "tables imported" bash -c "mysql -h127.0.0.1 -uroot -proot -N -e \"select count(*) from information_schema.tables where table_schema='v2board'; select email,is_admin from v2board.v2_user;\""
@@ -94,8 +94,18 @@ jobs:
           php artisan serve --host=127.0.0.1 --port=8000 > serve.log 2>&1 &
           sleep 4
           step "GET /api/v1/guest/comm/config" bash -c "curl -sS -w '\nHTTP %{http_code}\n' http://127.0.0.1:8000/api/v1/guest/comm/config | tail -c 1500; curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/v1/guest/comm/config | grep -q 200"
-          step "GET /api/v1/guest/plan/fetch" bash -c "curl -sS -w '\nHTTP %{http_code}\n' http://127.0.0.1:8000/api/v1/guest/plan/fetch | tail -c 800"
-          step "POST /api/v1/passport/auth/login (wrong pw)" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -X POST -d 'email=admin@example.com&password=wrongpass' http://127.0.0.1:8000/api/v1/passport/auth/login | tail -c 800"
+          ADMIN_PW=$(grep -oP '管理员密码：\K\S+' /tmp/install.txt)
+          SECURE=$(grep -oP '你的站点/\K[0-9a-f]+' /tmp/install.txt | tail -1)
+          step "POST login (wrong password, expect 500 + message)" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -X POST -d 'email=admin@example.com&password=wrongpass' http://127.0.0.1:8000/api/v1/passport/auth/login | head -c 300"
+          curl -sS -X POST --data-urlencode "email=admin@example.com" --data-urlencode "password=$ADMIN_PW" http://127.0.0.1:8000/api/v1/passport/auth/login > /tmp/login.json
+          AUTH=$(php -r '$j=json_decode(file_get_contents("/tmp/login.json"),true); echo $j["data"]["auth_data"] ?? "";')
+          step "POST login (correct password)" bash -c "head -c 600 /tmp/login.json; echo; test -n '$AUTH'"
+          step "GET /api/v1/user/info" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/user/info | head -c 1500; curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/user/info | grep -q 200"
+          step "GET /api/v1/user/getStat" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/user/getStat | head -c 600"
+          step "GET admin stat/getStat" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/$SECURE/stat/getStat | head -c 1500; curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/$SECURE/stat/getStat | grep -q 200"
+          step "GET admin user/fetch" bash -c "curl -sS -w '\nHTTP %{http_code}\n' -H 'Authorization: $AUTH' 'http://127.0.0.1:8000/api/v1/$SECURE/user/fetch?current=1&pageSize=10' | head -c 1200; curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: $AUTH' 'http://127.0.0.1:8000/api/v1/$SECURE/user/fetch?current=1&pageSize=10' | grep -q 200"
+          step "GET admin config/fetch" bash -c "curl -s -o /dev/null -w 'HTTP %{http_code}\n' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/$SECURE/config/fetch; curl -s -o /dev/null -w '%{http_code}' -H 'Authorization: $AUTH' http://127.0.0.1:8000/api/v1/$SECURE/config/fetch | grep -q 200"
+          step "GET /{secure_path} admin page" bash -c "curl -s -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8000/$SECURE; curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/$SECURE | grep -q 200"
           step "GET / (theme)" bash -c "curl -sS -o /dev/null -w 'HTTP %{http_code}\n' http://127.0.0.1:8000/ ; curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/ | grep -q 200"
           step "laravel.log" bash -c "tail -c 4000 storage/logs/*.log 2>/dev/null; tail -c 2000 serve.log; true"
 
