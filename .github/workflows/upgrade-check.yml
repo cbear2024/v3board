@@ -38,6 +38,7 @@ jobs:
       - name: Run checks
         shell: bash
         run: |
+          set +e +o pipefail
           export COMPOSER_ALLOW_SUPERUSER=1
           R=report.md
           echo "## PHP ${{ matrix.php }}" > $R
@@ -56,6 +57,7 @@ jobs:
           step "composer version" php composer.phar --version
           step "composer install" php composer.phar install --no-interaction --no-progress
           step "composer require joanhey/adapterman" php composer.phar require joanhey/adapterman --no-interaction --no-progress
+          step "installed versions" bash -c "php composer.phar show | grep -E '^(laravel/|symfony/yaml|joanhey|workerman|monolog|nesbot)'"
           step "composer audit" php composer.phar audit --no-interaction
 
           # 逐个加载 app/ 与 library/ 下所有类，捕获签名不兼容等致命错误
@@ -70,7 +72,7 @@ jobs:
           EOF
 
           cp .env.example .env
-          sed -i 's/^APP_KEY=.*/APP_KEY=base64:'"$(head -c 32 /dev/urandom | base64)"'/' .env
+          sed -i 's|^APP_KEY=.*|APP_KEY=base64:'"$(head -c 32 /dev/urandom | base64)"'|' .env
           sed -i 's/^DB_HOST=.*/DB_HOST=127.0.0.1/; s/^DB_DATABASE=.*/DB_DATABASE=v2board/; s/^DB_PASSWORD=.*/DB_PASSWORD=root/; s/^APP_DEBUG=.*/APP_DEBUG=true/' .env
 
           step "artisan boots" php artisan --version
