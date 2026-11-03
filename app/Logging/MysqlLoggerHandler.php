@@ -1,43 +1,46 @@
 <?php
 namespace App\Logging;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Monolog\Handler\AbstractProcessingHandler;
-use Monolog\Logger;
+use Monolog\Level;
+use Monolog\LogRecord;
 use App\Models\Log as LogModel;
 
 class MysqlLoggerHandler extends AbstractProcessingHandler
 {
-    public function __construct($level = Logger::DEBUG, bool $bubble = true)
+    public function __construct(int|string|Level $level = Level::Debug, bool $bubble = true)
     {
         parent::__construct($level, $bubble);
     }
 
-    protected function write(array $record): void
+    protected function write(LogRecord $record): void
     {
         try{
-            if(isset($record['context']['exception']) && is_object($record['context']['exception'])){
-                $record['context']['exception'] = (array)$record['context']['exception'];
+            $context = $record->context;
+            $extra = $record->extra;
+            if(isset($context['exception']) && is_object($context['exception'])){
+                $context['exception'] = (array)$context['exception'];
             }
-            $record['request_data'] = request()->all() ??[];
+            $requestData = request()->all() ?? [];
+            $timestamp = $record->datetime->getTimestamp();
             $log = [
-                'title' => $record['message'],
-                'level' => $record['level_name'],
-                'host' => $record['request_host'] ?? request()->getSchemeAndHttpHost(),
-                'uri' => $record['request_uri'] ?? request()->getRequestUri(),
-                'method' => $record['request_method'] ?? request()->getMethod(),
+                'title' => $record->message,
+                'level' => $record->level->getName(),
+                'host' => $extra['request_host'] ?? request()->getSchemeAndHttpHost(),
+                'uri' => $extra['request_uri'] ?? request()->getRequestUri(),
+                'method' => $extra['request_method'] ?? request()->getMethod(),
                 'ip' => request()->getClientIp(),
-                'data' => json_encode($record['request_data']) ,
-                'context' => isset($record['context']) ? json_encode($record['context']) : '',
-                'created_at' => strtotime($record['datetime']),
-                'updated_at' => strtotime($record['datetime']),
+                'data' => json_encode($requestData),
+                'context' => json_encode($context),
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
             ];
 
             LogModel::insert(
                 $log
             );
-        }catch (\Exception $e){
+        }catch (\Throwable $e){
             // 只有在 APP_DEBUG 为 true 时才写入日志文件
             if (config('app.debug')) {
                 Log::channel('daily')->error($e->getMessage().$e->getFile().$e->getTraceAsString());
