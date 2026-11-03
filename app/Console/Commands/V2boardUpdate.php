@@ -51,9 +51,9 @@ class V2boardUpdate extends Command
         }
         $this->info('正在导入数据库请稍等...');
         foreach ($sql as $item) {
-            if (!$item) continue;
+            if (!trim($item)) continue;
             try {
-                DB::select(DB::raw($item));
+                DB::unprepared($item);
             } catch (\Exception $e) {
             }
         }

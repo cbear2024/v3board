@@ -6,7 +6,7 @@ use Illuminate\Foundation\Exceptions\Handler as ExceptionHandler;
 use Illuminate\Support\Arr;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Throwable;
-use Facade\Ignition\Exceptions\ViewException;
+use Illuminate\View\ViewException;
 
 class Handler extends ExceptionHandler
 {
@@ -53,7 +53,9 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
-        if ($exception instanceof ViewException) {
+        // Ignition (dev only) wraps view errors in its own class, so match by name too.
+        if ($exception instanceof ViewException
+            || get_class($exception) === 'Spatie\LaravelIgnition\Exceptions\ViewException') {
             abort(500, "主题渲染失败。如更新主题，参数可能发生变化请重新配置主题后再试。");
         }
         return parent::render($request, $exception);
